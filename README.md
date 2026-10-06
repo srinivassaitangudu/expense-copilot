@@ -1,89 +1,60 @@
-# Expense Copilot v0.1
+# Expense Copilot
 
-A chat-first shared-expense assistant.
+A personal, chat-first shared-expense assistant:
 
-## Mental model
-Teller -> Expense Copilot (FastAPI + Postgres) -> review in MCP client -> Splitwise.
+**Transaction source → Postgres → MCP review in ChatGPT/Claude Code → future Splitwise publishing.**
 
-The database owns workflow state. Splitwise is an output, not the database.
+The database owns workflow state. No expense UI is required. Teller signup is
+unavailable for the current path. Normalized CSV and synthetic data are usable now;
+live-bank access is a separate integration, not a prerequisite for MCP review.
 
-## v0.1 scope
-- Multi-user-shaped schema (user_id is present everywhere that matters)
-- Teller client + idempotent transaction upsert
-- 10-day reconciliation window for pending->posted changes
-- Review states: unreviewed/shared/personal/ignored
-- Splitwise client abstraction
-- onboarding page scaffold
-- MCP tool contract scaffold
-- Render blueprint
-- local SQLite for development; hosted Postgres for deployment
+## Development
 
-## Run locally
-1. Use Python 3.12: `python -m venv .venv && source .venv/bin/activate`
-2. `pip install -r requirements.txt`
-3. `cp .env.example .env`
-4. `python -m scripts.init_db`
-5. `uvicorn app.main:app --reload`
-6. Open `http://localhost:8000`
+Use Python 3.12 from the repository root:
 
-## Before real bank data
-Teller development/production requires mTLS. Never commit Teller certificates, private
-keys, access tokens, Splitwise tokens, or `.env`. The current code defaults to Teller
-sandbox and a dev identity.
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+python -m scripts.init_db
+python -m app.mcp_server
+```
 
-## Next build slice
-1. Complete Teller Connect callback and encrypted token persistence.
-2. Add Splitwise OAuth authorize/callback flow.
-3. Add real auth (OIDC) so MCP calls map to a user.
-4. Implement `push_verified_expenses` with an idempotency ledger.
-5. Expose Streamable HTTP MCP endpoint.
-6. Add webhook-driven Teller sync.
+The last command starts local stdio MCP, not a browser app. See [MCP setup](docs/mcp.md)
+for Claude Code configuration, authenticated remote HTTP, and verification details.
+Use `examples/transactions.csv` as synthetic tool input. The normalized format is
+`transaction_id,account_id,date,amount,description`, with YYYY-MM-DD dates and at
+most two decimal places. Positive amounts are expenses; negative amounts are refunds.
+CSV assumes posted transactions in a single, unspecified currency. Stable source IDs
+are required. Repeat IDs skip changed values and preserve decisions. Limits:
+5,000 rows and 1,000,000 characters. Sequential development imports only.
 
-## Important product constraint
-Splitwise's self-serve API is documented for hobbyist/personal integrations and is not
-intended for fee-based commercial services. If this becomes a commercial product,
-revisit licensing before launch.
+The private development REST API (`app.main:app`) remains for compatibility. It
+uses `dev-user` and must never be the public hosted entrypoint. The MCP HTTP factory
+is `app.mcp_http:create_app`; it exposes no development REST endpoints or UI.
+Do not use the old Render blueprint until the hosting configuration PR is merged.
 
-## Develop without Teller
+## Current scope
 
-Teller signup is not required for this development path. Start with normalized CSV
-imports, then review transactions through the existing API. The current endpoints
-use a shared development identity: do not expose this app publicly or import real
-financial data until authentication and per-user authorization are implemented.
+- Official MCP SDK: stdio and authenticated, stateless Streamable HTTP.
+- CSV import, paginated outstanding review, and explicit decisions.
+- OAuth issuer/JWKS verification, scope enforcement, and personal-subject allowlist.
+- Per-user database access; local stdio has an operator-selected development identity.
+- Shared decisions never publish automatically. Only posted positive expenses can
+  be marked shared; already-published rows cannot be changed through review.
+- On-demand bank sync is added by the separate bank-ingestion PR. No scheduled sync.
+- Splitwise authorization, split allocation, and idempotent publishing remain future work.
 
-1. Install requirements and run `python -m scripts.init_db` from the repository root.
-2. Start `uvicorn app.main:app --reload`.
-3. Open `/docs`, choose `POST /api/transactions/import/csv`, and submit a JSON object
-   with a `csv` string containing the contents of `examples/transactions.csv`.
-4. Use `GET /api/transactions/unreviewed` and the review endpoint to classify rows.
+Run `python -m pytest -q`. GitHub Actions runs synthetic tests without credentials.
+OAuth authentication is implemented as a resource server; a hosted issuer and real
+client login must be configured and verified before claiming ChatGPT connectivity.
 
-Required CSV columns: `transaction_id,account_id,date,amount,description`.
-Dates use YYYY-MM-DD. Amounts are signed decimals with at most two decimal places;
-use positive amounts for expenses and negative amounts for refunds. Import only
-posted transactions in one currency (currency-aware splitting is not implemented).
-Bank exports must be normalized to this format before import. Use stable source
-transaction IDs, not row numbers that change across exports. Distinct purchases
-need distinct IDs even when date, amount, and description match.
+## Workflow and data
 
-Imports accept up to 5,000 rows and a 1,000,000-character CSV string. Invalid files
-are rejected before transaction insertion. Repeated account/transaction IDs within
-a file are rejected. Previously imported IDs are skipped, preserving review state;
-changed values for an existing ID are also skipped, not reconciled. Imports are
-intended to run sequentially in this development version.
-
-CSV IDs use a separate namespace in the legacy `teller_transaction_id` column, so
-this slice requires no database migration and does not change Teller sync behavior.
-The CSV route does not require Teller credentials or call any bank API. Splitwise
-writes and an actual MCP transport remain future work.
-
-## Branch and cloud workflow
-
-Use feature branches and pull requests targeting `main`. Run `python -m pytest`
-before opening a PR. GitHub Actions runs the same tests without provider secrets.
-For Codex Cloud, select this repository, install `requirements.txt`, and use
-`python -m pytest` as the verification command. A cloud environment must be created
-and published in Codex separately; committing these files does not activate one.
-
-Never commit `.env` files, private keys, certificates, provider tokens, database
-credentials, or real transaction exports. `.env.example` must contain placeholders
-only. Keep development imports and local databases outside version control.
+Use separate feature branches and PRs targeting `main`. Do not merge or deploy
+without authorization. Use synthetic data until hosted access is configured.
+Never commit `.env`, certificates, private keys, provider tokens, credential-bearing
+URLs, databases, or real financial exports. Keep placeholders in `.env.example`.
+Render free hosting and Supabase Postgres are the intended deployment; cloud coding
+alone neither provisions nor hosts them. Review current Splitwise API terms before
+any commercial use; this project is personal and is not production-ready multi-user SaaS.
