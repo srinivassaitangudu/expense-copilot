@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: expense-copilot
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python scripts/init_db.py && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: ENCRYPTION_KEY
+        generateValue: true
+      - key: TELLER_APPLICATION_ID
+        sync: false
+      - key: SPLITWISE_CLIENT_ID
+        sync: false
+      - key: SPLITWISE_CLIENT_SECRET
+        sync: false

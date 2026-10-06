@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "splitwise": {
+      "command": "node",
+      "args": ["/Users/nivas/Developer/personal projects/Splitwise-MCP/dist/src/index.js"]
+    }
+  }
+}
