@@ -1,0 +1,3 @@
+transaction_id,account_id,date,amount,description
+sample-001,demo-checking,2026-10-01,42.50,Sample groceries
+sample-002,demo-checking,2026-10-02,18.00,Sample lunch

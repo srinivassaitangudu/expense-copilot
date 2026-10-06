@@ -1,6 +1,6 @@
 import secrets
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.db import get_db
@@ -44,4 +44,19 @@ def review(transaction_id: str, body: Review, db: Session=Depends(get_db)):
 def setup_state(db: Session=Depends(get_db)):
     ensure_dev_user(db)
     return {"user_id":DEV_USER,"teller_connected":False,"splitwise_connected":False,
-            "next":"Wire provider credentials; UI scaffold is available at /."}
+            "next":"Import a normalized CSV at /api/transactions/import/csv; bank credentials are optional."}
+
+
+class CSVImport(BaseModel):
+    csv: str = Field(min_length=1, max_length=1_000_000)
+
+
+@router.post("/transactions/import/csv")
+def import_transactions(body: CSVImport, db: Session = Depends(get_db)):
+    from app.services.imports import import_csv
+    ensure_dev_user(db)
+    try:
+        return import_csv(db, DEV_USER, body.csv)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(422, detail=str(exc)) from exc
