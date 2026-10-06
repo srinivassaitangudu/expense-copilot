@@ -13,7 +13,7 @@ The database owns workflow state. Splitwise is an output, not the database.
 - 10-day reconciliation window for pending->posted changes
 - Review states: unreviewed/shared/personal/ignored
 - Splitwise client abstraction
-- onboarding page scaffold
+- CSV upload and transaction-review page
 - MCP tool contract scaffold
 - Render blueprint
 - local SQLite for development; hosted Postgres for deployment
@@ -53,9 +53,19 @@ financial data until authentication and per-user authorization are implemented.
 
 1. Install requirements and run `python -m scripts.init_db` from the repository root.
 2. Start `uvicorn app.main:app --reload`.
-3. Open `/docs`, choose `POST /api/transactions/import/csv`, and submit a JSON object
-   with a `csv` string containing the contents of `examples/transactions.csv`.
-4. Use `GET /api/transactions/unreviewed` and the review endpoint to classify rows.
+3. Open `/`, choose a normalized UTF-8 CSV, and click **Import transactions**.
+   Or click **Try sample transactions** to import the synthetic example without a file.
+   **Download CSV** provides that same example as a template.
+4. Mark each transaction **Shared**, **Personal**, or **Ignore**. Decisions are saved
+   through the existing review API and reviewed rows leave the queue. **Refresh**
+   reloads outstanding transactions; queues over 20 rows have page controls.
+
+The page reports import/skipped counts and validation errors. Reimporting the same
+file preserves earlier decisions. Amounts display without a currency symbol because
+the current schema has no currency field. Marking a row shared does **not** publish
+it to Splitwise. Reviewed rows cannot yet be edited from this page.
+
+The import and review APIs remain available through `/docs`.
 
 Required CSV columns: `transaction_id,account_id,date,amount,description`.
 Dates use YYYY-MM-DD. Amounts are signed decimals with at most two decimal places;
@@ -87,3 +97,23 @@ and published in Codex separately; committing these files does not activate one.
 Never commit `.env` files, private keys, certificates, provider tokens, database
 credentials, or real transaction exports. `.env.example` must contain placeholders
 only. Keep development imports and local databases outside version control.
+
+## Optional browser checks
+
+The regular test suite uses the pinned requirements. For browser regression checks,
+install Playwright separately in your development environment:
+
+```bash
+python -m pip install playwright
+python -m playwright install chromium
+python scripts/check_review_ui.py --screenshots /tmp/expense-copilot-preview
+```
+
+If Chromium is already installed, pass `--browser /path/to/chromium`. If Playwright
+and the application dependencies use different Python environments, pass
+`--python /path/to/application/python`. The script starts a loopback-only server
+with a disposable database and synthetic data, then stops it. It checks import,
+all review decisions, reload persistence, duplicate imports, validation, HTML-safe
+descriptions, pagination, request failures, and mobile overflow. Screenshots are
+optional and should stay outside version control. Browser checks are separate
+from the pytest job in GitHub Actions.
