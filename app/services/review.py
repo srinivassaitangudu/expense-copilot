@@ -1,5 +1,6 @@
 """User-scoped operations shared by conversational and HTTP boundaries."""
 from sqlalchemy import select
+import json
 from sqlalchemy.orm import Session
 from app.models import User, Transaction, ReviewState, SyncState
 
@@ -22,7 +23,15 @@ def list_unreviewed(db: Session, user_id: str, limit: int = 100, offset: int = 0
 
 
 def serialize(row):
+    currency = None
+    try:
+        metadata = json.loads(row.raw_json or '{}')
+        if isinstance(metadata, dict) and metadata.get('source') == 'simplefin':
+            currency = metadata.get('currency')
+    except (ValueError, TypeError):
+        pass
     return {'id': row.id, 'date': row.txn_date.isoformat(), 'amount': str(row.amount),
+            'currency': currency,
             'merchant': row.merchant, 'description': row.description,
             'category': row.category, 'status': row.bank_status}
 

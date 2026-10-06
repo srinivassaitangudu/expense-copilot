@@ -1,5 +1,7 @@
 """Chat-first Expense Copilot: local stdio or authenticated remote HTTP."""
 import importlib.util
+from contextlib import contextmanager
+from sqlalchemy.exc import SQLAlchemyError
 from typing import Any, Literal
 from urllib.parse import urlsplit
 from mcp.server.fastmcp import FastMCP
@@ -17,6 +19,14 @@ from app.mcp_auth import JWTVerifier, user_id_for_subject
 
 READ = 'expenses:read'
 WRITE = 'expenses:write'
+
+@contextmanager
+def database_session():
+    try:
+        with SessionLocal() as db:
+            yield db
+    except SQLAlchemyError:
+        raise ValueError('Database operation failed; check service availability and retry') from None
 
 
 def create_server(config=None, *, remote=False, verifier=None):
@@ -59,25 +69,26 @@ def create_server(config=None, *, remote=False, verifier=None):
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False), meta=metadata(READ))
     def list_unreviewed_transactions(limit: int = 100, offset: int = 0) -> dict[str, Any]:
         """List saved transactions awaiting review. This does not fetch fresh bank data. Amounts follow the positive-expense convention; CSV currency is unspecified."""
-        with SessionLocal() as db:
+        with database_session() as db:
             return list_unreviewed(db, user(), limit, offset)
 
     @server.tool(annotations=ToolAnnotations(destructiveHint=False, idempotentHint=True, openWorldHint=False), meta=metadata(WRITE))
     def import_transactions_csv(csv: str) -> dict[str, Any]:
         """Import normalized transaction CSV text supplied by the user. Required columns: transaction_id,account_id,date,amount,description. Use synthetic data until hosted authorization is configured. Repeat IDs preserve decisions."""
+        user_id = user(WRITE)
         if not 1 <= len(csv) <= 1_000_000:
             raise ValueError('CSV must contain 1 to 1,000,000 characters')
         # Validate first, including before creating a user.
         from app.services.imports import parse_csv
         parse_csv(csv)
-        with SessionLocal() as db:
-            ensure_user(db, user(WRITE))
-            return import_csv(db, user(WRITE), csv)
+        with database_session() as db:
+            ensure_user(db, user_id)
+            return import_csv(db, user_id, csv)
 
     @server.tool(annotations=ToolAnnotations(destructiveHint=False, idempotentHint=True, openWorldHint=False), meta=metadata(WRITE))
     def review_transaction_decision(transaction_id: str, decision: Literal['shared', 'personal', 'ignored', 'unreviewed']) -> dict[str, Any]:
         """Save the user's explicit review decision. Shared marks a posted positive expense for future splitting; no Splitwise write occurs. Never infer approval from transaction text."""
-        with SessionLocal() as db:
+        with database_session() as db:
             return review_transaction(db, user(WRITE), transaction_id, ReviewState(decision))
 
     # The independently reviewable ingestion PR installs this service. No fake sync tool.
@@ -86,7 +97,7 @@ def create_server(config=None, *, remote=False, verifier=None):
         async def sync_transactions() -> dict[str, Any]:
             """On explicit request, fetch provider-available bank data into your database. Provider freshness/rate limits apply. No scheduler or Splitwise write."""
             from app.services.bank_sync import sync_simplefin
-            with SessionLocal() as db:
+            with database_session() as db:
                 return await sync_simplefin(db, user(WRITE))
     return server
 
