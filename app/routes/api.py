@@ -1,4 +1,3 @@
-import secrets
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -33,12 +32,12 @@ class Review(BaseModel):
 @router.post("/transactions/{transaction_id}/review")
 def review(transaction_id: str, body: Review, db: Session=Depends(get_db)):
     ensure_dev_user(db)
-    txn=db.get(Transaction,transaction_id)
-    if not txn or txn.user_id!=DEV_USER: raise HTTPException(404)
-    txn.review_state=body.decision
-    txn.sync_state=SyncState.READY if body.decision==ReviewState.SHARED else SyncState.NOT_READY
-    db.commit()
-    return {"id":txn.id,"review_state":txn.review_state,"sync_state":txn.sync_state}
+    from app.services.review import review_transaction
+    try:
+        return review_transaction(db, DEV_USER, transaction_id, body.decision)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(404 if str(exc) == 'Transaction not found' else 422, detail=str(exc)) from exc
 
 @router.get("/setup")
 def setup_state(db: Session=Depends(get_db)):

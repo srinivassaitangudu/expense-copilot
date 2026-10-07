@@ -1,8 +1,8 @@
 {
   "mcpServers": {
-    "splitwise": {
-      "command": "node",
-      "args": ["/Users/nivas/Developer/personal projects/Splitwise-MCP/dist/src/index.js"]
+    "expense-copilot": {
+      "command": "python",
+      "args": ["-m", "app.mcp_server"]
     }
   }
 }
