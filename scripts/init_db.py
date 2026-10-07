@@ -1,4 +1,5 @@
 from app.db import Base, engine
 import app.models
+import app.bank_models
 Base.metadata.create_all(engine)
 print("database initialized")
