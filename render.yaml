@@ -1,18 +1,25 @@
+# Merge the MCP and bank-ingestion PRs before enabling this deployment.
 services:
   - type: web
     name: expense-copilot
     runtime: python
     plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: python scripts/init_db.py && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    autoDeployTrigger: 'off'
+    healthCheckPath: /healthz
+    buildCommand: pip install -r requirements.txt && python -c "import app.mcp_http; import app.services.bank_sync"
+    startCommand: python -m scripts.init_hosted_db && uvicorn app.mcp_http:create_app --factory --host 0.0.0.0 --port $PORT --no-access-log
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.14
       - key: DATABASE_URL
         sync: false
       - key: ENCRYPTION_KEY
         generateValue: true
-      - key: TELLER_APPLICATION_ID
+      - key: MCP_BASE_URL
         sync: false
-      - key: SPLITWISE_CLIENT_ID
+      - key: OAUTH_ISSUER
         sync: false
-      - key: SPLITWISE_CLIENT_SECRET
+      - key: OAUTH_JWKS_URL
+        sync: false
+      - key: OAUTH_ALLOWED_SUBJECTS
         sync: false
