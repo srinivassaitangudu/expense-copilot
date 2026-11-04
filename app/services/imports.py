@@ -1,6 +1,7 @@
 """Import normalized CSV rows without bank-provider credentials."""
 import csv
 import io
+import re
 from datetime import date
 from decimal import Decimal, InvalidOperation
 
@@ -9,6 +10,9 @@ from sqlalchemy.orm import Session
 from app.models import Transaction
 
 REQUIRED = {"transaction_id", "account_id", "date", "amount", "description"}
+# date.fromisoformat also accepts basic (YYYYMMDD) and week (YYYY-Www-D) forms on
+# Python 3.11+; the CSV contract is calendar YYYY-MM-DD only.
+ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 def parse_csv(content: str) -> list[dict]:
@@ -32,6 +36,8 @@ def parse_csv(content: str) -> list[dict]:
             try:
                 amount = Decimal(row["amount"])
                 if not amount.is_finite() or abs(amount) >= Decimal("10000000000") or amount != amount.quantize(Decimal("0.01")):
+                    raise ValueError()
+                if not ISO_DATE.match(row["date"]):
                     raise ValueError()
                 txn_date = date.fromisoformat(row["date"])
             except (ValueError, InvalidOperation):
