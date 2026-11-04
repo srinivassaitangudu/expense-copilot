@@ -33,9 +33,12 @@ def parse_csv(content: str) -> list[dict]:
                 amount = Decimal(row["amount"])
                 if not amount.is_finite() or abs(amount) >= Decimal("10000000000") or amount != amount.quantize(Decimal("0.01")):
                     raise ValueError()
-                txn_date = date.fromisoformat(row["date"])
             except (ValueError, InvalidOperation):
-                raise ValueError(f"Row {line}: use an ISO date and a finite amount with at most two decimals") from None
+                raise ValueError(f"Row {line}: amount {row['amount']!r} must be a finite number with at most two decimals") from None
+            try:
+                txn_date = date.fromisoformat(row["date"])
+            except ValueError:
+                raise ValueError(f"Row {line}: date {row['date']!r} must be written YYYY-MM-DD (for example 2026-11-03)") from None
             identity = (row["account_id"], row["transaction_id"])
             if identity in seen:
                 raise ValueError(f"Row {line}: duplicate account/transaction ID")

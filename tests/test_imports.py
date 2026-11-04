@@ -48,6 +48,20 @@ def test_invalid_csv(client, content):
     assert client.get('/api/transactions/unreviewed').json() == []
 
 
+def test_bad_date_error_names_value_and_format(client):
+    # JEEVY-2335: a bank export with 11/03/2026 is refused, and the message must say what to use instead.
+    response = client.post('/api/transactions/import/csv', json={'csv': CSV + 'c,checking,11/03/2026,1.00,Bank export\n'})
+    assert response.status_code == 422
+    assert response.json()['detail'] == "Row 4: date '11/03/2026' must be written YYYY-MM-DD (for example 2026-11-03)"
+    assert client.get('/api/transactions/unreviewed').json() == []
+
+
+def test_bad_amount_error_names_value(client):
+    response = client.post('/api/transactions/import/csv', json={'csv': CSV + 'c,checking,2026-10-02,1.001,Bad\n'})
+    assert response.status_code == 422
+    assert response.json()['detail'] == "Row 4: amount '1.001' must be a finite number with at most two decimals"
+
+
 def test_identity_is_scoped_by_user_and_account(db):
     db.add_all([User(id='one'), User(id='two')]); db.commit()
     assert import_csv(db, 'one', CSV)['created'] == 2
