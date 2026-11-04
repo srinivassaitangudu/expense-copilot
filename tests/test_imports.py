@@ -48,6 +48,14 @@ def test_invalid_csv(client, content):
     assert client.get('/api/transactions/unreviewed').json() == []
 
 
+@pytest.mark.parametrize('bad_date', ['20261104', '2026-W45-3', '2026-11-04T00:00:00', '2026-11-4', '04-11-2026'])
+def test_date_must_be_yyyy_mm_dd(client, bad_date):
+    # date.fromisoformat accepts basic and week formats on Python 3.11+; the CSV contract is YYYY-MM-DD only.
+    response = client.post('/api/transactions/import/csv', json={'csv': CSV + f'c,checking,{bad_date},1.00,Bad date\n'})
+    assert response.status_code == 422
+    assert client.get('/api/transactions/unreviewed').json() == []
+
+
 def test_identity_is_scoped_by_user_and_account(db):
     db.add_all([User(id='one'), User(id='two')]); db.commit()
     assert import_csv(db, 'one', CSV)['created'] == 2
